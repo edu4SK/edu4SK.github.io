@@ -1,8 +1,200 @@
+<!DOCTYPE html>
 <html>
 <head>
-  <title> AI 어플</title>
+    <title>Teachable Machine Image Model</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            /* Enhanced background for a modern, clean look */
+            background: #e0f2f7; /* Light blue-gray fallback */
+            background: linear-gradient(135deg, #e0f2f7 0%, #c4e0ef 100%); /* Subtle gradient */
+            color: #333;
+            padding: 20px;
+            box-sizing: border-box;
+            position: relative; /* Needed for pseudo-elements */
+            overflow: hidden; /* Prevent pseudo-elements from causing scrollbars */
+        }
+
+        /* Decorative background shapes */
+        body::before,
+        body::after {
+            content: '';
+            position: absolute;
+            z-index: -1; /* Send behind content */
+            border-radius: 50%;
+            background: rgba(173, 216, 230, 0.4); /* Light blue with transparency */
+            filter: blur(80px); /* Soft blur effect */
+        }
+
+        body::before {
+            width: 300px;
+            height: 300px;
+            top: -50px;
+            left: -50px;
+            background: rgba(144, 238, 144, 0.3); /* Light green with transparency */
+        }
+
+        body::after {
+            width: 400px;
+            height: 400px;
+            bottom: -80px;
+            right: -80px;
+            background: rgba(173, 216, 230, 0.4); /* Light blue with transparency */
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.1);
+            font-size: 2.5em; /* Slightly larger title */
+            letter-spacing: 1px;
+        }
+
+        #webcam-container {
+            border: 5px solid #6ab04c; /* A softer green border */
+            border-radius: 15px; /* More rounded corners */
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); /* Softer, wider shadow */
+            margin-bottom: 30px;
+            background-color: rgba(255, 255, 255, 0.9); /* More opaque white for clarity */
+            padding: 8px; /* More padding inside the container */
+            transition: transform 0.3s ease, box-shadow 0.3s ease; /* Smooth hover effect */
+        }
+
+        #webcam-container:hover {
+            transform: translateY(-5px); /* Lift on hover */
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        #webcam-container canvas {
+            display: block;
+        }
+
+        #label-container {
+            background-color: rgba(255, 255, 255, 0.98); /* Almost opaque white for best readability */
+            padding: 25px; /* More padding */
+            border-radius: 15px; /* More rounded corners */
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); /* Softer, wider shadow */
+            width: 320px; /* Slightly wider */
+            text-align: center;
+            backdrop-filter: blur(8px); /* Stronger blur effect */
+            -webkit-backdrop-filter: blur(8px);
+            transition: transform 0.3s ease, box-shadow 0.3s ease; /* Smooth hover effect */
+        }
+
+        #label-container:hover {
+            transform: translateY(-5px); /* Lift on hover */
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        #label-container div {
+            padding: 12px 0; /* Increased padding */
+            font-size: 1.25em; /* Slightly larger font size */
+            color: #333; /* Darker text for contrast */
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: 500; /* Medium font weight */
+        }
+
+        #label-container div:last-child {
+            border-bottom: none;
+        }
+
+        button {
+            background-color: #3498db; /* A vibrant blue */
+            color: white;
+            padding: 18px 35px; /* Even larger button */
+            border: none;
+            border-radius: 10px; /* More rounded corners */
+            font-size: 1.4em; /* Larger font size */
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2); /* Stronger shadow */
+            letter-spacing: 0.5px;
+        }
+
+        button:hover {
+            background-color: #2980b9; /* Darker blue on hover */
+            transform: translateY(-5px); /* More pronounced lift effect */
+            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        button:active {
+            background-color: #2471a3;
+            transform: translateY(0);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+    </style>
 </head>
 <body>
-  안녕하세요. 반갑습니다.
+    <h1>Teachable Machine Live Predictor</h1>
+
+    <button type="button" onclick="init()">Start Webcam</button>
+
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script type="text/javascript">
+        // More API functions here:
+        // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/image
+
+        // the link to your model provided by Teachable Machine export panel
+        const URL = "https://teachablemachine.withgoogle.com/models/c_09-QdCU/"; // REMEMBER TO UPDATE THIS WITH YOUR MODEL URL!
+
+        let model, webcam, labelContainer, maxPredictions;
+
+        // Load the image model and setup the webcam
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            // load the model and metadata
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            // Convenience function to setup a webcam
+            const flip = true; // whether to flip the webcam
+            webcam = new tmImage.Webcam(200, 200, flip); // width, height, flip
+            await webcam.setup(); // request access to the webcam
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            // append elements to the DOM
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) { // and class labels
+                labelContainer.appendChild(document.createElement("div"));
+            }
+
+            // Hide the button once started
+            document.querySelector('button').style.display = 'none';
+        }
+
+        async function loop() {
+            webcam.update(); // update the webcam frame
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        // run the webcam image through the image model
+        async function predict() {
+            // predict can take in an image, video or canvas html element
+            const prediction = await model.predict(webcam.canvas);
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction =
+                    prediction[i].className + ": " + (prediction[i].probability * 100).toFixed(0) + "%"; // Display as percentage
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+        }
+    </script>
 </body>
 </html>
